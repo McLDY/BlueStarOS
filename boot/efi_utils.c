@@ -189,8 +189,8 @@ EFI_STATUS boot_kernel(void) {
     UINT32 descriptor_version;
     
     // 第一次调用获取所需大小
-    EFI_STATUS status = gST->BootServices->GetMemoryMap(&memory_map_size, memory_map, &map_key,
-                                      &descriptor_size, &descriptor_version);
+    EFI_STATUS status = gST->BootServices->GetMemoryMap(&memory_map_size, memory_map, &map_key, // <-- memory_map 是 NULL
+                                          &descriptor_size, &descriptor_version);
     if (status != EFI_BUFFER_TOO_SMALL) {
         print_error(L"[X] Get memory map size", status);
      
@@ -209,6 +209,9 @@ EFI_STATUS boot_kernel(void) {
     // 获取实际内存映射
     status = gST->BootServices->GetMemoryMap(&memory_map_size, memory_map, &map_key,
                            &descriptor_size, &descriptor_version);
+    if (EFI_ERROR(status)) {
+        return status;
+    }
     
     // 退出引导服务
     status = gST->BootServices->ExitBootServices(gImageHandle, map_key);
@@ -221,7 +224,8 @@ EFI_STATUS boot_kernel(void) {
     kernel_entry();
     
     // 不应该到达这里
-    gST->BootServices->FreePool(memory_map);
+    while (1);
+
     return EFI_SUCCESS;
 }
 
