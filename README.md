@@ -28,8 +28,8 @@ make run
 QQ: 2480340196  
 
 ### McLDY（突发恶疾的李大爷）
-邮箱：  
-QQ：  
+邮箱：mcldy00@outlook.com
+QQ：3777426705
 
 ### fyqcell（不爱写内核的哥们）
 邮箱：  
