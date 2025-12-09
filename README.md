@@ -1,16 +1,12 @@
 ![Logo](./MWOS.png)
 # MWOS
-### 全自研的UEFI操作系统
+### 全自研的操作系统
 
 ## 编译
 在Linux环境下，在项目**根目录**下运行：
 ```bash
 make clean
 make
-make run
-```
-或者这样也可以：
-```bash
 make run
 ```
 
@@ -31,8 +27,7 @@ B站：UID:3546599963756811
 ### McLDY（突发恶疾的李大爷）
 邮箱：mcldy00@outlook.com  
 QQ：3777426705  
-B站：UID:3546599963756811
-
+B站：UID:3546599963756811  
 ### fyqcell（不爱写内核的哥们）
 邮箱：  
 QQ：  
