@@ -1,4 +1,4 @@
-![Logo](./MWOS.png)
+![Logo](./assets/MWOS.png)
 # MWOS
 ### 全自研的操作系统
 

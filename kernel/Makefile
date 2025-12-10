@@ -183,6 +183,8 @@ override OBJ += $(addprefix obj-$(ARCH)/,$(NASMFILES:.asm=.asm.o))
 endif
 override HEADER_DEPS := $(addprefix obj-$(ARCH)/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
 
+OBJ += asm/idt.o
+
 # Default target. This must come first, before header dependencies.
 .PHONY: all
 all: bin-$(ARCH)/$(OUTPUT)

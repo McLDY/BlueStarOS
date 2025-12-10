@@ -4,6 +4,11 @@
 #include "io.h"
 #include "limine.h"
 #include "sb16.h"
+#include "sata.h"
+#include "keyboard.h"
+#include "mouse.h"
+#include "idt.h"
+#include "pic.h"
 
 volatile struct limine_framebuffer_request framebuffer_request
     __attribute__((section(".limine"), used)) = {
@@ -71,6 +76,33 @@ static void serial_puthex64(uint64_t v) {
     buf[16] = '\0';
     serial_puts("0x");
     serial_puts(buf);
+}
+
+// 绘制简单的鼠标指针
+void draw_cursor(int x, int y) {
+    // 绘制简单的十字光标
+    for (int i = -5; i <= 5; i++) {
+        if (x + i >= 0 && x + i < g_framebuffer->framebuffer_width) {
+            put_pixel(x + i, y, COLOR_WHITE);
+        }
+        if (y + i >= 0 && y + i < g_framebuffer->framebuffer_height) {
+            put_pixel(x, y + i, COLOR_WHITE);
+        }
+    }
+}
+
+// 清除鼠标指针
+void clear_cursor(int x, int y) {
+    // 简单的清除方法：重新绘制背景
+    // 注意：这应该根据实际背景更智能地实现
+    for (int i = -5; i <= 5; i++) {
+        if (x + i >= 0 && x + i < g_framebuffer->framebuffer_width) {
+            put_pixel(x + i, y, 0x008080); // Win98蓝色背景
+        }
+        if (y + i >= 0 && y + i < g_framebuffer->framebuffer_height) {
+            put_pixel(x, y + i, 0x008080); // Win98蓝色背景
+        }
+    }
 }
 
 void kmain(void *params) {
@@ -188,10 +220,13 @@ void kmain(void *params) {
     }
 
     serial_puts("graphics initialized, clearing screen\n");
+    
+    uint32_t SCREEN_WIDTH = g_framebuffer->framebuffer_width;
+    uint32_t SCREEN_HEIGHT = g_framebuffer->framebuffer_height;
+
 
     // 初始化文本颜色并清屏
-    fb_set_colors(COLOR_WHITE, COLOR_BLACK);
-    fb_clear_text();
+
     /*
     // 绘图与文本测试
     draw_test_square();
@@ -242,10 +277,7 @@ void kmain(void *params) {
                   1, 24 - 2*i, 0x808080); // 右边框
     }
     
-    // 在开始按钮上写"Start"文字
-    // 注意：你需要有fbtext的支持，这里只是示意
-    fb_set_cursor(10, g_framebuffer->framebuffer_height - 26);
-    fb_puts("Start");
+    print_string("Start", 30, SCREEN_HEIGHT-22, 0x000000);
     
     // 绘制窗口（Win98经典窗口样式）
     int win_width = 400;
@@ -320,6 +352,42 @@ void kmain(void *params) {
         for (volatile int i = 0; i < 2000000; i++);
     }
     
+    // main.c (添加以下内容到适当位置)
+
+    // 在kmain函数中添加
+    serial_puts("Initializing storage devices...\n");
+    /*
+    // 初始化SATA
+    serial_puts("Initializing SATA/AHCI controller...\n");
+    if (sata_init()) {
+        serial_puts("SATA controller initialized successfully\n");
+        // 测试SATA
+        sata_test();
+    } else {
+        serial_puts("SATA initialization failed or no SATA controller found\n");
+    }*/
+    
+    /*    // 初始化中断
+    serial_puts("Initializing interrupt system...\n");
+    idt_init();*/
+    pic_init();
+    
+    // 初始化键盘
+    serial_puts("Initializing keyboard...\n");
+    keyboard_init();
+    
+    // 初始化鼠标
+    serial_puts("Initializing mouse...\n");
+    mouse_init();
+    
+    // 启用键盘和鼠标中断
+    pic_enable_irq(1);  // 键盘 (IRQ1)
+    pic_enable_irq(12); // 鼠标 (IRQ12)
+    
+    serial_puts("Keyboard and mouse initialized.\n");
+    
+
+    
     // 简单的鼠标指针（白色箭头）
     for (int i = 0; i < 10; i++) {
         put_pixel(g_framebuffer->framebuffer_width / 2 + i,
@@ -332,6 +400,77 @@ void kmain(void *params) {
     //for (volatile int i = 0; i < 500000; i++) { /* busy wait */ }
 
     while (1) {
-    asm volatile("hlt");
-}
+        int cursor_x = g_framebuffer->framebuffer_width / 2;
+        int cursor_y = g_framebuffer->framebuffer_height / 2;
+        int last_mouse_x = cursor_x;
+        int last_mouse_y = cursor_y;
+        
+        // 绘制初始鼠标指针
+        draw_cursor(cursor_x, cursor_y);
+        
+        while (1) {
+            // 处理键盘输入
+            if (keyboard_available()) {
+                int key = get_key();
+                char c = get_ascii_char(key);
+                
+                if (c != 0) {
+                    // 显示按键
+                    char buf[2] = {c, '\0'};
+                    print_string(buf,10,10,0x000000);
+                } else {
+                    // 处理特殊键
+                    switch (key) {
+                        case KEY_ENTER:
+                            print_string("\n",10,20,0x000000);
+                            break;
+                        case KEY_BACKSPACE:
+                            // 处理退格键
+                            break;
+                        case KEY_UP:
+                        case KEY_DOWN:
+                        case KEY_LEFT:
+                        case KEY_RIGHT:
+                            // 方向键处理
+                            break;
+                    }
+                }
+            }
+            
+            // 处理鼠标移动
+            int mouse_x, mouse_y;
+            uint8_t mouse_buttons;
+            get_mouse_state(&mouse_x, &mouse_y, &mouse_buttons);
+            
+            // 限制鼠标在屏幕范围内
+            if (mouse_x < 0) mouse_x = 0;
+            if (mouse_x >= g_framebuffer->framebuffer_width) 
+                mouse_x = g_framebuffer->framebuffer_width - 1;
+            if (mouse_y < 0) mouse_y = 0;
+            if (mouse_y >= g_framebuffer->framebuffer_height)
+                mouse_y = g_framebuffer->framebuffer_height - 1;
+            
+            // 更新鼠标指针位置
+            if (mouse_x != last_mouse_x || mouse_y != last_mouse_y) {
+                // 清除旧的鼠标指针
+                clear_cursor(last_mouse_x, last_mouse_y);
+                
+                // 绘制新的鼠标指针
+                draw_cursor(mouse_x, mouse_y);
+                
+                last_mouse_x = mouse_x;
+                last_mouse_y = mouse_y;
+            }
+            
+            // 处理鼠标点击
+            if (mouse_buttons) {
+                if (mouse_buttons & 0x01) {
+                    // 左键点击
+                    draw_cursor(mouse_x, mouse_y); // 重新绘制确保可见
+                }
+            }
+            
+            asm volatile("hlt");
+        }
+    }
 }
