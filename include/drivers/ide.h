@@ -47,7 +47,7 @@ void ide_identify(void);
 uint8_t ide_polling(uint8_t check_error);
 void ide_wait(void);
 uint8_t ide_check_drive(void);
-void ide_wait_ready(void);
-void ide_wait_drq(void);
+int ide_wait_ready(void);
+int ide_wait_drq(void);
 
 #endif

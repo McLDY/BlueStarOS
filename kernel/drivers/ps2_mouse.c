@@ -19,7 +19,7 @@
                    `=---='
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
             佛祖保佑       永无BUG
-*/
+
 
 #include "drivers/ps2_mouse.h"
 #include "io.h"
@@ -196,3 +196,4 @@ void restore_mouse_background() {
         }
     }
 }
+*/

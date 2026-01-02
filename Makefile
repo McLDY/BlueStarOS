@@ -53,7 +53,7 @@ KERNEL_CFLAGS = -target x86_64-linux-gnu -ffreestanding -fno-builtin \
                 -fno-stack-protector -mno-red-zone -Wall -Wextra -O2 $(INCLUDE) \
 				-mgeneral-regs-only -mno-sse -mno-mmx -Iinclude/ -Iinclude/freestnd-c-hdrs/ \
                 $(KERNEL_INCLUDE_DIRS) -Wno-unused-variable -Wno-unused-parameter \
-                -Wno-unused-but-set-variable 
+                -Wno-unused-but-set-variable -Wno-unused-function -Wno-comment
 
 .PHONY: all clean uefi kernel disk run debug list-sources list-dirs
 

@@ -50,47 +50,49 @@ static inline void io_wait(void) {
     asm volatile("outb %%al, $0x80" : : "a"(0));
 }*/
 
-// 等待磁盘就绪
-void ide_wait_ready(void) {
-    uint8_t status;
-    do {
-        status = inb(IDE_STATUS);
-        // 检查错误位
-        if (status & IDE_STATUS_ERR) {
-            uint8_t error = inb(IDE_ERROR);
-            serial_puts("IDE Error: 0x");
-            char hex[3];
-            hex[0] = "0123456789ABCDEF"[error >> 4];
-            hex[1] = "0123456789ABCDEF"[error & 0xF];
-            hex[2] = 0;
-            serial_puts(hex);
-            serial_puts("\n");
-            return;
-        }
-    } while (status & IDE_STATUS_BSY);
-}
-
-// 等待数据请求
-void ide_wait_drq(void) {
-    uint8_t status;
-    while (1) {
-        status = inb(IDE_STATUS);
-        if (status & IDE_STATUS_ERR) {
-            uint8_t error = inb(IDE_ERROR);
-            serial_puts("IDE DRQ Error: 0x");
-            char hex[3];
-            hex[0] = "0123456789ABCDEF"[error >> 4];
-            hex[1] = "0123456789ABCDEF"[error & 0xF];
-            hex[2] = 0;
-            serial_puts(hex);
-            serial_puts("\n");
-            return;
-        }
-        if (status & IDE_STATUS_DRQ) {
-            break;
+// 修改 ide_wait_drq，使其能告知调用者是否发生了错误
+int ide_wait_ready(void) {
+    uint32_t timeout = 100000; // 设置一个超时计数
+    while (timeout--) {
+        uint8_t status = inb(IDE_STATUS);
+        
+        // 如果 BSY 位清零，说明驱动器已经处理完之前的命令
+        if (!(status & IDE_STATUS_BSY)) {
+            // 只有在 BSY=0 时检查 ERR 才是有意义的
+            if (status & IDE_STATUS_ERR) {
+                uint8_t err = inb(IDE_ERROR);
+                serial_puts("IDE Status Error: 0x");
+                serial_puthex8(err);
+                serial_puts("\n");
+                return -1;
+            }
+            return 0; // 成功
         }
     }
+    serial_puts("IDE Wait Ready Timeout!\n");
+    return -1;
 }
+
+int ide_wait_drq(void) {
+    uint32_t timeout = 100000;
+    while (timeout--) {
+        uint8_t status = inb(IDE_STATUS);
+        
+        // 出现错误位，立即退出
+        if (status & IDE_STATUS_ERR) {
+            return -1;
+        }
+        
+        // BSY 必须为 0 且 DRQ 必须为 1 才是真的准备好传输数据了
+        if (!(status & IDE_STATUS_BSY) && (status & IDE_STATUS_DRQ)) {
+            return 0;
+        }
+    }
+    serial_puts("IDE Wait DRQ Timeout!\n");
+    return -1;
+}
+
+
 
 // 检查磁盘是否存在
 uint8_t ide_check_drive(void) {
@@ -139,6 +141,9 @@ void ide_init(void) {
 }
 
 int ide_read_sectors(uint32_t lba, uint8_t num_sectors, void* buffer) {
+    /*serial_puts("Reading LBA...");
+    serial_putdec64(lba);
+    serial_puts("\n");*/
     uint16_t* buf = (uint16_t*)buffer;
     
     // 等待磁盘就绪
@@ -156,7 +161,11 @@ int ide_read_sectors(uint32_t lba, uint8_t num_sectors, void* buffer) {
     
     for (int sector = 0; sector < num_sectors; sector++) {
         // 等待数据就绪
-        ide_wait_drq();
+        if (ide_wait_drq() != 0) {
+            serial_puts("Read failed: DRQ not set\n");
+            return -1;
+        }
+        
         
         // 读取256个字（512字节）
         for (int i = 0; i < 256; i++) {
@@ -174,38 +183,50 @@ int ide_read_sectors(uint32_t lba, uint8_t num_sectors, void* buffer) {
 int ide_write_sectors(uint32_t lba, uint8_t num_sectors, void* buffer) {
     uint16_t* buf = (uint16_t*)buffer;
     
-    // 等待磁盘就绪
-    ide_wait_ready();
+    // 调试信息：打印当前尝试写入的地址
+    // 如果报错时这个 LBA 很大（比如超过 129024），说明 FAT32 的簇计算逻辑有 Bug
+    serial_puts("IDE Write -> LBA: ");
+    serial_putdec64(lba);
+    serial_puts(", Count: ");
+    serial_putdec64(num_sectors);
+    serial_puts("\n");
+
+    if (num_sectors == 0) return -1;
+
+    // 1. 等待就绪
+    if (ide_wait_ready() != 0) return -1;
     
-    // 设置LBA地址和扇区数
-    outb(IDE_DRIVE_HEAD, defult_device | IDE_LBA_MODE | ((lba >> 24) & 0x0F));
+    // 2. 设置寄存器
+    outb(IDE_DRIVE_HEAD, 0xE0 | ((lba >> 24) & 0x0F)); // 强制使用 LBA 模式
     outb(IDE_SECTOR_CNT, num_sectors);
     outb(IDE_LBA_LOW, lba & 0xFF);
     outb(IDE_LBA_MID, (lba >> 8) & 0xFF);
     outb(IDE_LBA_HIGH, (lba >> 16) & 0xFF);
     
-    // 发送写命令
+    // 3. 发送写命令
     outb(IDE_COMMAND, IDE_CMD_WRITE);
     
     for (int sector = 0; sector < num_sectors; sector++) {
-        // 等待数据请求
-        ide_wait_drq();
+        // 4. 【关键】等待 DRQ。如果返回 -1，说明磁盘拒绝了写入请求（ABRT）
+        if (ide_wait_drq() != 0) {
+            serial_puts("Write failed at sector ");
+            serial_putdec64(sector);
+            serial_puts("\n");
+            return -1; // 立即退出，不要写数据端口！
+        }
         
-        // 写入256个字（512字节）
+        // 5. 写入 512 字节
         for (int i = 0; i < 256; i++) {
             outw(IDE_DATA, buf[i]);
         }
         buf += 256;
         
-        // 等待写入完成
-        ide_wait_ready();
-        
-        // 短暂延迟
+        // 短暂延迟让硬件处理
         io_wait();
     }
     
-    // 刷新缓存
-    outb(IDE_COMMAND, IDE_CMD_FLUSH);
+    // 6. 刷新缓存并等待完成
+    outb(IDE_COMMAND, 0xE7); // IDE_CMD_FLUSH
     ide_wait_ready();
     
     return 0;

@@ -19,7 +19,7 @@
                    `=---='
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
             佛祖保佑       永无BUG
-*/
+
 
 #include "drivers/keyboard.h"
 #include "io.h"
@@ -56,7 +56,7 @@ const char kbd_us_upper[128] = {
     serial_puts("Key input: ");
     serial_putc(final_char);
     serial_puts("\n");
-}*/
+}
 
 void keyboard_callback(interrupt_frame_t *frame) {
     uint8_t scancode = inb(0x60);
@@ -114,4 +114,4 @@ void keyboard_init() {
     // 取消 PIC 屏蔽 IRQ 1
     uint8_t mask = inb(0x21);
     outb(0x21, mask & 0xFD);
-}
+}*/
