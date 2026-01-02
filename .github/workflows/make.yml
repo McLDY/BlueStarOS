@@ -24,7 +24,7 @@ jobs:
       
       - name: Get OVMF
         run: |
-            curl -o OVMF.fd https://github.com/clearlinux/common/raw/refs/heads/master/OVMF.fd
+            wget https://github.com/clearlinux/common/raw/refs/heads/master/OVMF.fd
       
       - name: Upload OS image
         uses: actions/upload-artifact@v4
