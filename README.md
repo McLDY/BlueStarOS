@@ -11,6 +11,11 @@
 `Objcopy`
 `OVMF`
 
+**可选**
+`QEMU`
+`Bochs`
+`VMWare`
+
 ### 在项目**根目录**下运行：
 ```bash
 make clean
@@ -23,11 +28,34 @@ make
 ## 运行
 ### 使用QEMU运行
 ```bash
-qemu-system-x86_64 -m 1024 -drive file=os-image.img,format=raw -bios OVMF.fd -serial stdio 
+qemu-system-x86_64 -m 1024 -drive file=os-image.img,format=raw -bios OVMF.fd
 ```
 替换`os-image`为你编译/下载的镜像
 替换`OVMF.fd`为你的OVMF
-**OVMF下载**
+
+### 使用Bochs运行
+首先创建bochsrc.bxrc：
+```bash
+touch bochsrc.bxrc
+```
+然后向bochsrc.bxrc写入：
+``` ini
+megs: 1024
+
+romimage: file=OVMF.fd, address=0xfff80000
+
+ata0-master: type=disk, path="os-image.img", mode=flat, translation=auto
+
+com1: enabled=1, mode=stdio
+
+boot: disk
+```
+启动：
+```bash
+bochs -q -f bochsrc.bxrc
+```
+
+### OVMF下载
 `https://github.com/clearlinux/common/raw/refs/heads/master/OVMF.fd`
 或者在Actions里面找最新的Artifacts，下载即可
 
