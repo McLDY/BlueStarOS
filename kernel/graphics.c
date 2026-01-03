@@ -1,123 +1,80 @@
-/*
-                   _ooOoo_
-                  o8888888o
-                  88" . "88
-                  (| -_- |)
-                  O\  =  /O
-               ____/`---'\____
-             .'  \\|     |//  `.
-            /  \\|||  :  |||//  \
-           /  _||||| -:- |||||-  \
-           |   | \\\  -  /// |   |
-           | \_|  ''\---/''  |   |
-           \  .-\__  `-`  ___/-. /
-         ___`. .'  /--.--\  `. . __
-      ."" '<  `.___\_<|>_/___.'  >'"".
-     | | :  `- \`.;`\ _ /`;.`/ - ` : | |
-     \  \ `-.   \_ __\ /__ _/   .-` /  /
-======`-.____`-.___\_____/___.-`____.-'======
-                   `=---='
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            佛祖保佑       永无BUG
-*/
-
+#include "graphics.h"
 #include "kernel.h"
 
-framebuffer_info_t *g_framebuffer = NULL;
+// 全局帧缓冲区信息指针
+boot_params_t *g_framebuffer = NULL;
 
-void graphics_init(framebuffer_info_t *fb_info) {
+
+// 初始化图形系统
+void graphics_init(boot_params_t *fb_info) {
     g_framebuffer = fb_info;
 }
 
+// 绘制单个像素
 void put_pixel(uint32_t x, uint32_t y, uint32_t color) {
-    if (!g_framebuffer || !g_framebuffer->framebuffer_addr) {
+    // 快速边界检查
+    if (!g_framebuffer || x >= g_framebuffer->framebuffer_width || y >= g_framebuffer->framebuffer_height) {
         return;
     }
 
-    if (x >= g_framebuffer->framebuffer_width || y >= g_framebuffer->framebuffer_height) {
-        return;
-    }
-
-    uint32_t *framebuffer = (uint32_t*)g_framebuffer->framebuffer_addr;
-    uint32_t pitch_in_pixels = g_framebuffer->framebuffer_width;
-
-    uint32_t pixel_index = y * pitch_in_pixels + x;
-
-    framebuffer[pixel_index] = color;
+    uint32_t *fb = (uint32_t*)g_framebuffer->framebuffer_addr;
+    // 使用每行像素跨度 (Pitch / 4) 进行索引
+    fb[y * (g_framebuffer->framebuffer_pitch >> 2) + x] = color;
 }
 
+// 清空屏幕
 void clear_screen(uint32_t color) {
-    if (!g_framebuffer || !g_framebuffer->framebuffer_addr) {
-        return;
-    }
+    if (!g_framebuffer || !g_framebuffer->framebuffer_addr) return;
 
-    uint32_t *framebuffer = (uint32_t*)g_framebuffer->framebuffer_addr;
-    uint32_t total_pixels = (g_framebuffer->framebuffer_width) * g_framebuffer->framebuffer_height;  //g_framebuffer->framebuffer_height * g_framebuffer->framebuffer_width;
+    uint32_t *fb = (uint32_t*)g_framebuffer->framebuffer_addr;
+    uint32_t pitch_in_pixels = g_framebuffer->framebuffer_pitch >> 2;
+    uint32_t total_pixels = pitch_in_pixels * g_framebuffer->framebuffer_height;
 
+    // 线性填充，编译器通常会将其优化为高效的 memset 变体
     for (uint32_t i = 0; i < total_pixels; i++) {
-        framebuffer[i] = color;
+        fb[i] = color;
     }
 }
 
+// 绘制矩形
 void draw_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) {
-    if (!g_framebuffer) {
-        return;
-    }
+    if (!g_framebuffer) return;
 
-    uint32_t max_x = x + width;
-    uint32_t max_y = y + height;
+    uint32_t screen_w = g_framebuffer->framebuffer_width;
+    uint32_t screen_h = g_framebuffer->framebuffer_height;
 
-    if (max_x > g_framebuffer->framebuffer_width) {
-        max_x = g_framebuffer->framebuffer_width;
-    }
-    if (max_y > g_framebuffer->framebuffer_height) {
-        max_y = g_framebuffer->framebuffer_height;
-    }
+    if (x >= screen_w || y >= screen_h) return;
 
-    for (uint32_t rect_y = y; rect_y < max_y; rect_y++) {
-        for (uint32_t rect_x = x; rect_x < max_x; rect_x++) {
-            put_pixel(rect_x, rect_y, color);
+    uint32_t end_x = x + width;
+    uint32_t end_y = y + height;
+
+    if (end_x > screen_w) end_x = screen_w;
+    if (end_y > screen_h) end_y = screen_h;
+
+    uint32_t *fb = (uint32_t*)g_framebuffer->framebuffer_addr;
+    uint32_t pitch_pixels = g_framebuffer->framebuffer_pitch >> 2;
+
+    for (uint32_t curr_y = y; curr_y < end_y; curr_y++) {
+        uint32_t row_start = curr_y * pitch_pixels;
+        for (uint32_t curr_x = x; curr_x < end_x; curr_x++) {
+            fb[row_start + curr_x] = color;
         }
     }
 }
 
-void draw_test_square(void) {
-    if (!g_framebuffer) {
-        return;
-    }
+// 通过串口输出调试信息
+void print_fb_info() {
+    if (!g_framebuffer) return;
 
-    uint32_t square_size = 100;
-    if (square_size > g_framebuffer->framebuffer_width ||
-        square_size > g_framebuffer->framebuffer_height) {
-        square_size = 50;
-    }
-
-    uint32_t x = (g_framebuffer->framebuffer_width - square_size) / 2;
-    uint32_t y = (g_framebuffer->framebuffer_height - square_size) / 2;
-
-    draw_rect(x, y, square_size, square_size, COLOR_BLUE);
+    serial_puts("--- Framebuffer Debug Info ---\n");
+    serial_puts("Address: 0x"); serial_puthex64(g_framebuffer->framebuffer_addr);
+    serial_puts("\nResolution: "); 
+    serial_putdec64(g_framebuffer->framebuffer_width);
+    serial_puts("x");
+    serial_putdec64(g_framebuffer->framebuffer_height);
+    serial_puts("\nPitch (Bytes): ");
+    serial_putdec64(g_framebuffer->framebuffer_pitch);
+    serial_puts("\nBPP: ");
+    serial_putdec64(g_framebuffer->framebuffer_bpp);
+    serial_puts("\n----------------------------\n");
 }
-
-void print_fb_info(){
-    if (!g_framebuffer || !g_framebuffer->framebuffer_addr) {
-        return;
-    }
-    //serial_init(0x3F8);
-    serial_puts("Framebuffer info:\n");
-    serial_puts("  addr: ");
-    serial_puthex64(g_framebuffer->framebuffer_addr);
-    serial_puts("\n");
-
-    serial_puts("  width: ");
-    serial_puthex64(g_framebuffer->framebuffer_width);
-    serial_puts("\n");
-
-    serial_puts("  height: ");
-    serial_puthex64(g_framebuffer->framebuffer_height);
-    serial_puts("\n");
-
-    serial_puts("  bpp: ");
-    serial_puthex64(g_framebuffer->framebuffer_bpp);
-    serial_puts("\n");
-}
-

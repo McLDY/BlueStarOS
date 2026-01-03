@@ -1,4 +1,6 @@
-#include "kernel.h"
+#include "cstd.h"
+#include "serial.h"
+#include "io.h"
 
 // 初始化串口
 void serial_init(uint16_t port) {

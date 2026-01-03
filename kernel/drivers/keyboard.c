@@ -1,29 +1,7 @@
-/*
-                   _ooOoo_
-                  o8888888o
-                  88" . "88
-                  (| -_- |)
-                  O\  =  /O
-               ____/`---'\____
-             .'  \\|     |//  `.
-            /  \\|||  :  |||//  \
-           /  _||||| -:- |||||-  \
-           |   | \\\  -  /// |   |
-           | \_|  ''\---/''  |   |
-           \  .-\__  `-`  ___/-. /
-         ___`. .'  /--.--\  `. . __
-      ."" '<  `.___\_<|>_/___.'  >'"".
-     | | :  `- \`.;`\ _ /`;.`/ - ` : | |
-     \  \ `-.   \_ __\ /__ _/   .-` /  /
-======`-.____`-.___\_____/___.-`____.-'======
-                   `=---='
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            佛祖保佑       永无BUG
-
-
 #include "drivers/keyboard.h"
 #include "io.h"
 #include "serial.h"
+#include "kernelcb.h"
 
 // 键盘状态标志
 static bool shift_pressed = false;
@@ -49,14 +27,6 @@ const char kbd_us_upper[128] = {
     0,  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '\"', '~', 0,
     '|', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0, '*', 0, ' ', 0
 };
-
-/*void on_keyboard_pressed(uint8_t scancode, uint8_t final_char)
-{
-    // 输出到串口
-    serial_puts("Key input: ");
-    serial_putc(final_char);
-    serial_puts("\n");
-}
 
 void keyboard_callback(interrupt_frame_t *frame) {
     uint8_t scancode = inb(0x60);
@@ -114,4 +84,4 @@ void keyboard_init() {
     // 取消 PIC 屏蔽 IRQ 1
     uint8_t mask = inb(0x21);
     outb(0x21, mask & 0xFD);
-}*/
+}

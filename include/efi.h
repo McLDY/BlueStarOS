@@ -3,16 +3,19 @@
 
 #include "efi_types.h"
 
+// 前向声明
 typedef struct _EFI_SIMPLE_TEXT_INPUT_PROTOCOL EFI_SIMPLE_TEXT_INPUT_PROTOCOL;
 typedef struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL;
 typedef struct _EFI_BOOT_SERVICES EFI_BOOT_SERVICES;
 typedef struct _EFI_RUNTIME_SERVICES EFI_RUNTIME_SERVICES;
 typedef struct _EFI_SYSTEM_TABLE EFI_SYSTEM_TABLE;
 
+// EFI 句柄和事件
 typedef VOID* EFI_HANDLE;
 typedef VOID* EFI_EVENT;
 typedef UINT64 EFI_TPL;
 
+// GUID 结构
 typedef struct {
     UINT32 Data1;
     UINT16 Data2;
@@ -20,6 +23,7 @@ typedef struct {
     UINT8 Data4[8];
 } EFI_GUID;
 
+// UEFI 内存类型
 typedef enum {
     EfiReservedMemoryType,
     EfiLoaderCode,
@@ -38,6 +42,7 @@ typedef enum {
     EfiMaxMemoryType
 } EFI_MEMORY_TYPE;
 
+// UEFI 内存描述符
 typedef struct {
     UINT32 Type;
     UINT32 Pad;
@@ -47,11 +52,13 @@ typedef struct {
     UINT64 Attribute;
 } EFI_MEMORY_DESCRIPTOR;
 
+// 输入键结构
 typedef struct {
     UINT16 ScanCode;
     CHAR16 UnicodeChar;
 } EFI_INPUT_KEY;
 
+// 简单文本输入协议函数指针
 typedef EFI_STATUS (EFIAPI *EFI_INPUT_RESET)(
     EFI_SIMPLE_TEXT_INPUT_PROTOCOL *This,
     BOOLEAN ExtendedVerification
@@ -62,12 +69,14 @@ typedef EFI_STATUS (EFIAPI *EFI_INPUT_READ_KEY)(
     EFI_INPUT_KEY *Key
 );
 
+// 简单文本输入协议
 struct _EFI_SIMPLE_TEXT_INPUT_PROTOCOL {
     EFI_INPUT_RESET Reset;
     EFI_INPUT_READ_KEY ReadKeyStroke;
     EFI_EVENT WaitForKey;
 };
 
+// 简单文本输出协议函数指针
 typedef EFI_STATUS (EFIAPI *EFI_TEXT_RESET)(
     EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
     BOOLEAN ExtendedVerification
@@ -115,6 +124,7 @@ typedef EFI_STATUS (EFIAPI *EFI_TEXT_ENABLE_CURSOR)(
     BOOLEAN Visible
 );
 
+// 简单文本输出模式
 typedef struct {
     INT32 MaxMode;
     INT32 Mode;
@@ -124,6 +134,7 @@ typedef struct {
     BOOLEAN CursorVisible;
 } SIMPLE_TEXT_OUTPUT_MODE;
 
+// 简单文本输出协议
 struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL {
     EFI_TEXT_RESET Reset;
     EFI_TEXT_STRING OutputString;
@@ -137,6 +148,7 @@ struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL {
     SIMPLE_TEXT_OUTPUT_MODE *Mode;
 };
 
+// 表头
 typedef struct {
     UINT64 Signature;
     UINT32 Revision;
@@ -145,6 +157,7 @@ typedef struct {
     UINT32 Reserved;
 } EFI_TABLE_HEADER;
 
+// 引导服务函数指针类型
 typedef EFI_STATUS (EFIAPI *EFI_RAISE_TPL)(EFI_TPL NewTpl);
 typedef VOID (EFIAPI *EFI_RESTORE_TPL)(EFI_TPL OldTpl);
 
@@ -411,6 +424,7 @@ typedef EFI_STATUS (EFIAPI *EFI_CREATE_EVENT_EX)(
     EFI_EVENT *Event
 );
 
+// 引导服务表
 struct _EFI_BOOT_SERVICES {
     EFI_TABLE_HEADER Hdr;
     EFI_RAISE_TPL RaiseTPL;
@@ -459,10 +473,13 @@ struct _EFI_BOOT_SERVICES {
     EFI_CREATE_EVENT_EX CreateEventEx;
 };
 
+// 运行时服务表（简化）
 struct _EFI_RUNTIME_SERVICES {
     EFI_TABLE_HEADER Hdr;
+    // 简化版本，省略具体函数指针
 };
 
+// EFI 系统表
 struct _EFI_SYSTEM_TABLE {
     EFI_TABLE_HEADER Hdr;
     CHAR16 *FirmwareVendor;
@@ -479,14 +496,18 @@ struct _EFI_SYSTEM_TABLE {
     VOID *ConfigurationTable;
 };
 
+// 应用程序入口点类型
 typedef EFI_STATUS (EFIAPI *EFI_IMAGE_ENTRY_POINT)(
     EFI_HANDLE ImageHandle,
     EFI_SYSTEM_TABLE *SystemTable
 );
 
+// 全局系统表指针
 extern EFI_SYSTEM_TABLE *gST;
 
+// 在文件末尾添加以下内容
 
+// 文件协议
 typedef struct _EFI_FILE_PROTOCOL EFI_FILE_PROTOCOL;
 
 typedef EFI_STATUS (EFIAPI *EFI_FILE_OPEN)(
@@ -552,6 +573,7 @@ struct _EFI_FILE_PROTOCOL {
     EFI_FILE_FLUSH Flush;
 };
 
+// 简单文件系统协议
 typedef struct _EFI_SIMPLE_FILE_SYSTEM_PROTOCOL EFI_SIMPLE_FILE_SYSTEM_PROTOCOL;
 
 typedef EFI_STATUS (EFIAPI *EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_OPEN_VOLUME)(
@@ -564,6 +586,7 @@ struct _EFI_SIMPLE_FILE_SYSTEM_PROTOCOL {
     EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_OPEN_VOLUME OpenVolume;
 };
 
+// 时间结构
 typedef struct {
     UINT16 Year;
     UINT8 Month;
@@ -578,9 +601,11 @@ typedef struct {
     UINT8 Pad2;
 } EFI_TIME;
 
+// 文件系统信息
 #define EFI_FILE_INFO_ID \
     {0x09576e92, 0x6d3f, 0x11d2, {0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b}}
 
+// 文件信息
 typedef struct {
     UINT64 Size;
     UINT64 FileSize;
@@ -592,13 +617,16 @@ typedef struct {
     CHAR16 FileName[1];
 } EFI_FILE_INFO;
 
+// 文件系统信息
 #define EFI_FILE_INFO_ID \
     {0x09576e92, 0x6d3f, 0x11d2, {0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b}}
 
+// 文件打开模式
 #define EFI_FILE_MODE_READ      0x0000000000000001
 #define EFI_FILE_MODE_WRITE     0x0000000000000002
 #define EFI_FILE_MODE_CREATE    0x8000000000000000
 
+// 文件属性
 #define EFI_FILE_READ_ONLY      0x0000000000000001
 #define EFI_FILE_HIDDEN         0x0000000000000002
 #define EFI_FILE_SYSTEM         0x0000000000000004
@@ -607,6 +635,7 @@ typedef struct {
 #define EFI_FILE_ARCHIVE        0x0000000000000020
 #define EFI_FILE_VALID_ATTR     0x0000000000000037
 
+// EFI图形输出协议
 #define EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID \
     {0x9042a9de, 0x23dc, 0x4a38, {0x96, 0xfb, 0x7a, 0xde, 0xd0, 0x80, 0x51, 0x6a}}
 

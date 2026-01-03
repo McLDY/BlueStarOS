@@ -1,26 +1,3 @@
-/*
-                   _ooOoo_
-                  o8888888o
-                  88" . "88
-                  (| -_- |)
-                  O\  =  /O
-               ____/`---'\____
-             .'  \\|     |//  `.
-            /  \\|||  :  |||//  \
-           /  _||||| -:- |||||-  \
-           |   | \\\  -  /// |   |
-           | \_|  ''\---/''  |   |
-           \  .-\__  `-`  ___/-. /
-         ___`. .'  /--.--\  `. . __
-      ."" '<  `.___\_<|>_/___.'  >'"".
-     | | :  `- \`.;`\ _ /`;.`/ - ` : | |
-     \  \ `-.   \_ __\ /__ _/   .-` /  /
-======`-.____`-.___\_____/___.-`____.-'======
-                   `=---='
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            佛祖保佑       永无BUG
-*/
-
 #include "gdt.h"
 #include "cstd.h"
 
@@ -40,9 +17,9 @@ void gdt_init() {
     gdtr.limit = (sizeof(struct gdt_entry) * 3) - 1;
     gdtr.base  = (uint64_t)&gdt;
 
-    gdt_set_gate(0, 0, 0, 0, 0);
-    gdt_set_gate(1, 0, 0xFFFFFFFF, 0x9A, 0xA0);
-    gdt_set_gate(2, 0, 0xFFFFFFFF, 0x92, 0x00);
+    gdt_set_gate(0, 0, 0, 0, 0);                // Null
+    gdt_set_gate(1, 0, 0xFFFFFFFF, 0x9A, 0xA0); // Kernel Code: 64-bit, Ring 0
+    gdt_set_gate(2, 0, 0xFFFFFFFF, 0x92, 0x00); // Kernel Data
 
     asm volatile(
         "lgdt %0\n\t"

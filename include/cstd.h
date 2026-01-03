@@ -11,4 +11,4 @@
 #include "stdalign.h"
 #include "stdnoreturn.h"
 
-#endif
+#endif // CSTD_H

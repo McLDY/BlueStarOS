@@ -19,8 +19,29 @@
                    `=---='
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
             佛祖保佑       永无BUG
+
+              ,----------------,              ,---------,
+         ,-----------------------,          ,"        ,"|
+       ,"                      ,"|        ,"        ,"  |
+      +-----------------------+  |      ,"        ,"    |
+      |  .-----------------.  |  |     +---------+      |
+      |  |                 |  |  |     | -==----'|      |
+      |  |  Never gonna    |  |  |     |         |      |
+      |  |  Give you bug   |  |  |/----|`---=    |      |
+      |  |  C:\>_          |  |  |   ,/|==== ooo |      ;
+      |  |                 |  |  |  // |(((( [33]|    ,"
+      |  `-----------------'  |," .;'| |((((     |  ,"
+      +-----------------------+  ;;  | |         |,"
+         /_)______________(_/  //'   | +---------+
+    ___________________________/___  `,
+   /  oooooooooooooooo  .o.  oooo /,   \,"-----------
+  / ==ooooooooooooooo==.o.  ooo= //   ,`\--{)B     ,"
+ /_==__==========__==_ooo__ooo=_/'   /___________,"
 */
 
+#include "kernel.h"
+#include "stdint.h"
+#include "graphics.h"
 #include "kernel.h"
 #include "stdint.h"
 #include "graphics.h"
@@ -28,14 +49,17 @@
 #include "drivers/fs/fat32.h"
 #include "string.h"
 
-typedef struct {
-    uint32_t x, y;
-    uint32_t w, h;
-    uint32_t cursor_x, cursor_y;
+// 终端窗口配置
+typedef struct
+{
+    uint32_t x, y;               // 窗口左上角坐标
+    uint32_t w, h;               // 窗口尺寸
+    uint32_t cursor_x, cursor_y; // 终端内部光标位置
     uint32_t bg_color;
     uint32_t text_color;
 } terminal_t;
 
+// 终端配置信息
 static terminal_t g_term = {
     .x = 80,
     .y = 80,
@@ -44,41 +68,76 @@ static terminal_t g_term = {
     .cursor_x = 8,
     .cursor_y = 8,
     .bg_color = 0x000000,
-    .text_color = 0x00FF00
+    .text_color = 0x00FF00 // 黑底绿字
 };
 
+// 上一次鼠标的位置，初始化为 -1 表示还未绘制过
+static int32_t old_mouse_x = -1;
+static int32_t old_mouse_y = -1;
+
+// 鼠标
+int32_t mouse_x = 0;
+int32_t mouse_y = 0;
+
+// 图形相关
 uint32_t screen_width;
 uint32_t screen_height;
 
-static void shell_term_output(const char* str);
-static void test_fat32(void);
-static uint32_t detect_fat32_partition(void);
-static void format_83_name(const char* src, char* dest);
+// 参数声明
+boot_params_t kernel_params;
+
+// 命令保存
+#define MAX_COMMAND_LEN 256
+static char g_input_buffer[MAX_COMMAND_LEN];
+static uint32_t g_input_index = 0;
 
 void draw_terminal_window();
 void term_putc(char c);
-void term_puts(const char* str);
+void on_keyboard_pressed(uint8_t scancode, uint8_t final_char);
+void term_puts(const char *str);
 void test_fat32_all(void);
+static uint32_t detect_fat32_partition(void);
+static void test_fat32(void);
+static void format_83_name(const char* src, char* dest);
 
-__attribute__((ms_abi, target("no-sse"), target("general-regs-only"))) void kmain(void *params) {
+__attribute__((ms_abi, target("no-sse"), target("general-regs-only")))
+void kmain(void *params) {
+    // 基础架构初始化
     serial_init(0x3F8);
-    serial_puts("Kernel starting...\n");
-
     gdt_init();
     idt_init();
-    pic_remap(32, 40);
-    asm volatile("sti");
+    
+    // PIC 重映射 (此时默认全屏蔽)
+    pic_remap(32, 40); 
+    
+    // 时钟初始化 (注册 IDT 32)
+    timer_init(1000); 
 
-    framebuffer_info_t *fb_info = (framebuffer_info_t*)params;
-    if (!fb_info) {
-        serial_puts("ERROR: Framebuffer info is null\n");
-        while (1);
-    }
+    // 获取并解析启动参数
+    /*boot_params_t *lp_params = (boot_params_t *)params;
+    kernel_params = *lp_params;*/
+    boot_params_t *lp_params = (boot_params_t *)params;
+    kernel_params = *lp_params;
+    uint32_t bytes_per_pixel = kernel_params.framebuffer_bpp / 8;
+    uint64_t framebuffer_size = (uint64_t)kernel_params.framebuffer_pitch * kernel_params.framebuffer_height * bytes_per_pixel;
 
+    // 内存与驱动初始化
+    serial_puthex64(kernel_params.memory_map_addr);
+    serial_puts("\n");
+    serial_puthex64(kernel_params.memory_map_size);
+    serial_puts("\n");
+    serial_puthex64(kernel_params.descriptor_size);
+    serial_puts("\n");
+    
+    pmm_init((void *)kernel_params.memory_map_addr, 
+             kernel_params.memory_map_size, 
+             kernel_params.descriptor_size);
+    //serial_puts("a\n")   ;      
     ide_init();
-    serial_puts("IDE driver loaded\n");
-
-    uint32_t fat32_partition_start = detect_fat32_partition();
+    keyboard_init();
+    mouse_init();
+    
+    /*uint32_t fat32_partition_start = detect_fat32_partition();
     if (fat32_partition_start != 0) {
         serial_puts("FAT32 partition detected at LBA: ");
         serial_putdec64(fat32_partition_start);
@@ -101,72 +160,223 @@ __attribute__((ms_abi, target("no-sse"), target("general-regs-only"))) void kmai
             serial_puts("FAT32 mounted at default location (LBA 2048)\n");
         }
     }
-    test_fat32_all();
-    graphics_init(fb_info);
-    screen_width = fb_info->framebuffer_width;
-    screen_height = fb_info->framebuffer_height;
+    test_fat32_all();*/
+    
+    // 图形系统
+    graphics_init(&kernel_params);
+    
+    // 开启主片: IRQ0(时钟), IRQ1(键盘), IRQ2(级联)
+    outb(0x21, 0xF8);
+    // 开启从片: IRQ12(鼠标)
+    outb(0xA1, 0xEF);
+    asm volatile("sti");
+    //serial_puts("a");
 
+    // UI 绘制
     clear_screen(0x169de2);
-
     draw_terminal_window();
+    term_puts("NovaVector MWOS [版本1.0.0]\n");
+    term_puts("(C) NovaVector Studio 保留所有权利\n");
+    term_puts("\n");
+    term_puts("Root@MWOS: /# ");
 
-    shell_set_term_output(shell_term_output);
-    shell_init();
+    // 主循环
+    while (1) {
+        asm volatile("hlt");
+    }
+}
 
-    term_puts("MWOS Kernel initialized successfully!\n");
-    term_puts("FAT32 File System: ");
+// 终端渲染
+void draw_terminal_window()
+{
+    // 绘制标题栏 (深蓝色)
+    draw_rect(g_term.x, g_term.y, g_term.w, 28, 0x224488);
+    print_string("MWOS System Terminal v1.0", g_term.x + 10, g_term.y + 6, 0xFFFFFF);
+    // 绘制终端黑色背景区
+    draw_rect(g_term.x, g_term.y + 28, g_term.w, g_term.h - 28, g_term.bg_color);
+}
 
-    if (fat32_partition_start != 0) {
-        char status_msg[64];
-        strcpy(status_msg, "Mounted at LBA ");
+void term_putc(char c)
+{
+    // 字符实际渲染坐标 = 窗口起始点 + 内容区偏移 + 光标偏移
+    uint32_t real_x = g_term.x + g_term.cursor_x;
+    uint32_t real_y = g_term.y + 28 + g_term.cursor_y;
 
-        char num_str[12];
-        uint32_t temp = fat32_partition_start;
-        int i = 0;
+    if (c == '\n')
+    {
+        g_term.cursor_x = 8;
+        g_term.cursor_y += 18;
+    }
+    else if (c == '\r')
+    {
+        g_term.cursor_x = 8;
+    }
+    else
+    {
+        put_char(c, real_x, real_y, g_term.text_color);
+        g_term.cursor_x += 8;
 
-        do {
-            num_str[i++] = '0' + (temp % 10);
-            temp /= 10;
-        } while (temp > 0);
-
-        for (int j = i - 1; j >= 0; j--) {
-            char c[2] = {num_str[j], 0};
-            strcat(status_msg, c);
+        // 自动换行
+        if (g_term.cursor_x + 16 > g_term.w)
+        {
+            g_term.cursor_x = 8;
+            g_term.cursor_y += 18;
         }
-
-        term_puts(status_msg);
-    } else {
-        term_puts("Not available");
     }
 
-    term_puts("\n");
-    term_puts("Use serial port (COM1) to enter commands.\n");
-    term_puts("Type 'help' for available commands.\n");
-    term_puts("Type 'ls' to list files on FAT32 partition.\n\n");
+    // 滚动检查
+    if (g_term.cursor_y + 18 > g_term.h - 30)
+    {
+        draw_rect(g_term.x, g_term.y + 28, g_term.w, g_term.h - 28, g_term.bg_color);
+        g_term.cursor_y = 8;
+    }
+}
 
-    while (1) {
-        if (serial_received()) {
-            char c = serial_getc();
+void term_puts(const char *str) {
+    uint8_t *p = (uint8_t *)str;
+    while (*p) {
+        uint32_t real_x = g_term.x + g_term.cursor_x;
+        uint32_t real_y = g_term.y + 28 + g_term.cursor_y;
 
-            if (c == '\r') {
-                c = '\n';
-            } else if (c == 0x7F) {
-                c = '\b';
-            }
+        // 处理换行符
+        if (*p == '\n') {
+            g_term.cursor_x = 8;
+            g_term.cursor_y += 18;
+            p++;
+        }
+        else if (*p == '\r') {
+            g_term.cursor_x = 8;
+            p++;
+        }
+        // 处理 ASCII (单字节)
+        else if (*p < 0x80) {
+            put_char(*p, real_x, real_y, g_term.text_color);
+            g_term.cursor_x += 8;
+            p++;
+        }
+        // 处理 UTF-8 汉字 (3 字节)
+        else if ((*p & 0xE0) == 0xE0) {
+            char utf8_buf[4];
+            utf8_buf[0] = p[0];
+            utf8_buf[1] = p[1];
+            utf8_buf[2] = p[2];
+            utf8_buf[3] = '\0';
 
-            term_putc(c);
-
-            shell_process_char(c);
+            print_string(utf8_buf, real_x, real_y, g_term.text_color);
+            
+            g_term.cursor_x += 16; // 汉字占据 16 像素宽
+            p += 3;
+        } 
+        else {
+            p++;
         }
 
-        for (volatile int i = 0; i < 1000; i++) {
-            asm volatile("nop");
+        // 自动换行
+        if (g_term.cursor_x + 16 > g_term.w) {
+            g_term.cursor_x = 8;
+            g_term.cursor_y += 18;
+        }
+
+        // 滚动检查
+        if (g_term.cursor_y + 18 > g_term.h - 30) {
+            draw_rect(g_term.x, g_term.y + 28, g_term.w, g_term.h - 28, g_term.bg_color);
+            g_term.cursor_y = 8;
         }
     }
 }
 
-static void shell_term_output(const char* str) {
-    term_puts(str);
+// 清空缓冲区
+void clear_input_buffer() {
+    for (uint32_t i = 0; i < MAX_COMMAND_LEN; i++) {
+        g_input_buffer[i] = '\0';
+    }
+    g_input_index = 0;
+}
+
+// 键盘回调
+void on_keyboard_pressed(uint8_t scancode, uint8_t final_char)
+{
+    if (final_char == 0) return;
+
+    // 处理回车
+    if (final_char == '\n' || final_char == '\r') {
+        term_putc('\n');
+        if (g_input_index > 0) {
+            if (strcmp(g_input_buffer, "version") == 0)
+            {
+                term_puts("NovaVector MWOS V1.0.0\n(C) NovaVector Studio 保留所有权利\n");
+            }
+            else if (strcmp(g_input_buffer, "/kill McLDY") == 0)
+            {
+                term_puts("McLDY was slain by _Undefiend404\n");
+            }
+            else
+            {
+                term_puts("Unknown command: ");
+                term_puts(g_input_buffer);
+                term_putc('\n');
+            }
+        }
+
+        clear_input_buffer();
+        term_puts("Root@MWOS: /# ");
+    }
+    // 处理退格
+    else if (final_char == '\b') {
+        if (g_input_index > 0) {
+            g_input_index--;
+            g_input_buffer[g_input_index] = '\0';
+            
+            // 视觉上回退
+            if (g_term.cursor_x > 8) {
+                g_term.cursor_x -= 8;
+                uint32_t real_x = g_term.x + g_term.cursor_x;
+                uint32_t real_y = g_term.y + 28 + g_term.cursor_y;
+                draw_rect(real_x, real_y, 8, 16, g_term.bg_color);
+            }
+        }
+    }
+    // 处理普通字符
+    else {
+        if (g_input_index < MAX_COMMAND_LEN - 1) {
+            g_input_buffer[g_input_index++] = (char)final_char;
+            g_input_buffer[g_input_index] = '\0';
+            term_putc((char)final_char);
+        }
+    }
+}
+
+// 鼠标回调
+void on_mouse_update(int32_t x_rel, int32_t y_rel, uint8_t left_button, uint8_t middle_button, uint8_t right_button)
+{
+    // 擦除旧光标
+    // 如果不是第一次绘制，先恢复上一次保存的背景
+    if (old_mouse_x != -1)
+    {
+        restore_mouse_background();
+    }
+
+    // 更新并限制鼠标坐标
+    mouse_x += x_rel;
+    mouse_y -= y_rel; // PS/2 Y轴向上为正，屏幕向下为正，所以用减法
+
+    // 边界检查
+    if (mouse_x < 0)
+        mouse_x = 0;
+    if (mouse_y < 0)
+        mouse_y = 0;
+    if (mouse_x >= (int32_t)g_framebuffer->framebuffer_width)
+        mouse_x = g_framebuffer->framebuffer_width - 1;
+    if (mouse_y >= (int32_t)g_framebuffer->framebuffer_height)
+        mouse_y = g_framebuffer->framebuffer_height - 1;
+
+    // 绘制检查
+    save_mouse_background(mouse_x, mouse_y);
+    draw_mouse_cursor(mouse_x, mouse_y);
+
+    // 记录当前位置为旧位置
+    old_mouse_x = mouse_x;
+    old_mouse_y = mouse_y;
 }
 
 static void test_fat32(void) {
@@ -336,50 +546,6 @@ static void format_83_name(const char* src, char* dest) {
     }
 
     dest[j] = '\0';
-}
-
-void draw_terminal_window() {
-    draw_rect(g_term.x, g_term.y, g_term.w, 28, 0x224488);
-    print_string("MWOS System Terminal v1.0", g_term.x + 10, g_term.y + 6, 0xFFFFFF);
-    draw_rect(g_term.x, g_term.y + 28, g_term.w, g_term.h - 28, g_term.bg_color);
-}
-
-void term_putc(char c) {
-    uint32_t real_x = g_term.x + g_term.cursor_x;
-    uint32_t real_y = g_term.y + 28 + g_term.cursor_y;
-
-    if (c == '\n') {
-        g_term.cursor_x = 8;
-        g_term.cursor_y += 18;
-    } else if (c == '\r') {
-        g_term.cursor_x = 8;
-    } else if (c == '\b') {
-        if (g_term.cursor_x > 8) {
-            g_term.cursor_x -= 8;
-            draw_rect(real_x - 8, real_y, 8, 16, g_term.bg_color);
-        }
-        return;
-    } else {
-        put_char(c, real_x, real_y, g_term.text_color);
-        g_term.cursor_x += 8;
-
-        if (g_term.cursor_x + 16 > g_term.w) {
-            g_term.cursor_x = 8;
-            g_term.cursor_y += 18;
-        }
-    }
-
-    if (g_term.cursor_y + 18 > g_term.h - 30) {
-        draw_rect(g_term.x, g_term.y + 28, g_term.w, g_term.h - 28, g_term.bg_color);
-        g_term.cursor_y = 8;
-    }
-}
-
-void term_puts(const char* str) {
-    while (*str) {
-        term_putc(*str++);
-
-    }
 }
 
 void test_fat32_all(void) {
@@ -570,4 +736,6 @@ void test_fat32_all(void) {
 
     serial_puts("\n=== FAT32 测试完成 ===\n");
 }
+
+
 

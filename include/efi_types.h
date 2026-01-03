@@ -1,18 +1,22 @@
 #ifndef EFI_TYPES_H
 #define EFI_TYPES_H
 
+// UEFI 基础类型定义
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 
+// 有符号类型定义
 typedef signed char int8_t;
 typedef signed short int16_t;
 typedef signed int int32_t;
 typedef signed long long int64_t;
 
+// UEFI 特定类型
 typedef uint8_t BOOLEAN;
 
+// 在 64 位 UEFI 中，UINTN 应该是 64 位
 typedef int64_t INTN;
 typedef uint64_t UINTN;
 typedef int64_t INT64;
@@ -26,11 +30,14 @@ typedef uint8_t UINT8;
 typedef uint16_t CHAR16;
 typedef uint8_t CHAR8;
 
+// 物理地址和虚拟地址类型
 typedef UINT64 EFI_PHYSICAL_ADDRESS;
 typedef UINT64 EFI_VIRTUAL_ADDRESS;
 
+// VOID 类型
 typedef void VOID;
 
+// NULL 定义
 #ifndef NULL
 #ifdef __cplusplus
 #define NULL 0
@@ -39,12 +46,14 @@ typedef void VOID;
 #endif
 #endif
 
+// EFIAPI 调用约定
 #ifdef _MSC_VER
 #define EFIAPI __cdecl
 #else
 #define EFIAPI __attribute__((ms_abi))
 #endif
 
+// EFI 状态码
 typedef UINT64 EFI_STATUS;
 
 #define EFI_SUCCESS 0
